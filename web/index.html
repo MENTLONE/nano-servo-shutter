@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Nano Servo Shutter</title>
+<style>
+:root{color-scheme:dark;font-family:system-ui,sans-serif;background:#111827;color:#e5e7eb}
+body{max-width:850px;margin:30px auto;padding:0 18px}h1{margin-bottom:4px}.muted,small{color:#9ca3af}
+.panel{background:#1f2937;border:1px solid #374151;border-radius:12px;padding:18px;margin:16px 0}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+button{border:0;border-radius:8px;padding:11px 16px;font-weight:650;cursor:pointer;background:#374151;color:white}
+.primary{background:#2563eb}.danger{background:#b91c1c}button:disabled{opacity:.4;cursor:not-allowed}
+input{width:100px;background:#111827;color:white;border:1px solid #4b5563;border-radius:7px;padding:9px}
+label{display:inline-flex;gap:7px;align-items:center;margin:7px 12px 7px 0}
+pre{background:#0b1020;border-radius:8px;padding:12px;max-height:230px;overflow:auto;white-space:pre-wrap}
+.warning{border-left:4px solid #f59e0b;background:#292319;padding:12px;border-radius:6px}
+</style></head><body>
+<h1>Nano Servo Shutter</h1><p class="muted">Browser control over USB serial · Arduino Nano + SG90</p>
+<section class="panel"><div class="row"><button id="connect" class="primary">Connect Nano</button><button id="disconnect" disabled>Disconnect</button><strong id="status">Not connected</strong></div></section>
+<section class="panel"><h2>Manual control</h2><div class="row">
+<button id="open" disabled>Open shutter</button><button id="close" class="danger" disabled>Close shutter</button>
+<button id="cancel" disabled>Cancel / close</button><button id="statusBtn" disabled>Read status</button></div></section>
+<section class="panel"><h2>Timed exposure</h2><label>Duration <input id="duration" type="number" min="1" max="3600000" value="1000"> ms</label>
+<button id="expose" class="primary" disabled>Start exposure</button>
+<p><small>The Nano closes after the requested command interval. Servo travel means actual optical exposure differs.</small></p></section>
+<section class="panel"><h2>Servo calibration</h2>
+<label>Open angle <input id="openAngle" type="number" min="0" max="180" value="68"></label>
+<label>Closed angle <input id="closedAngle" type="number" min="0" max="180" value="0"></label>
+<label>Relief angle <input id="reliefAngle" type="number" min="0" max="180" value="4"></label>
+<label>Travel allowance <input id="travelMs" type="number" min="50" max="2000" value="150"> ms</label>
+<div class="row"><button id="apply" disabled>Apply settings</button></div>
+<p><small>Travel allowance is stored for reference only; the firmware does not measure servo motion.</small></p></section>
+<section class="panel"><h2>Serial monitor</h2><pre id="log">Waiting for connection…</pre></section>
+<p class="warning"><strong>Laser safety:</strong> This servo shutter is not a safety interlock. Test with the laser disabled first. Use an independent secure beam stop/enclosure; do not rely on the servo as a laser barrier.</p>
+<script>
+(() => {
+ const $=id=>document.getElementById(id), enc=new TextEncoder(), dec=new TextDecoder();
+ let port=null,reader=null,writer=null,reading=false;
+ function log(s){const el=$('log');el.textContent+=(el.textContent?'\n':'')+new Date().toLocaleTimeString()+'  '+s;el.scrollTop=el.scrollHeight;}
+ function connected(on){$('status').textContent=on?'Connected':'Not connected';$('status').style.color=on?'#86efac':'#fbbf24';
+  ['disconnect','open','close','cancel','statusBtn','expose','apply'].forEach(id=>$(id).disabled=!on);$('connect').disabled=on;}
+ async function send(o){if(!writer)throw Error('Not connected');const line=JSON.stringify(o)+'\n';await writer.write(enc.encode(line));log('> '+line.trim());}
+ async function readLoop(){reading=true;let buf='';try{while(port&&port.readable&&reading){reader=port.readable.getReader();try{while(true){const {value,done}=await reader.read();if(done)break;buf+=dec.decode(value,{stream:true});let i;while((i=buf.indexOf('\n'))>=0){const line=buf.slice(0,i).trim();buf=buf.slice(i+1);if(line)log('< '+line);}}}finally{reader.releaseLock();reader=null;}}}catch(e){if(reading)log('Read error: '+e.message);}}
+ async function connect(){if(!('serial'in navigator)){alert('Web Serial requires desktop Chrome or Edge on localhost/HTTPS.');return;}try{port=await navigator.serial.requestPort();await port.open({baudRate:115200});writer=port.writable.getWriter();connected(true);log('Connected at 115200 baud');readLoop();}catch(e){log('Connect failed: '+e.message);port=null;writer=null;connected(false);}}
+ async function disconnect(){reading=false;try{if(reader)await reader.cancel();if(writer){writer.releaseLock();writer=null;}if(port){await port.close();port=null;}}catch(e){log('Disconnect error: '+e.message);}connected(false);log('Disconnected');}
+ $('connect').onclick=connect;$('disconnect').onclick=disconnect;
+ $('open').onclick=()=>send({cmd:'OPEN'}).catch(e=>log(e.message));
+ $('close').onclick=()=>send({cmd:'CLOSE'}).catch(e=>log(e.message));
+ $('cancel').onclick=()=>send({cmd:'CANCEL'}).catch(e=>log(e.message));
+ $('statusBtn').onclick=()=>send({cmd:'STATUS'}).catch(e=>log(e.message));
+ $('expose').onclick=()=>{const ms=Number($('duration').value);if(!Number.isInteger(ms)||ms<1||ms>3600000){alert('Enter a whole duration from 1 to 3,600,000 ms.');return;}send({cmd:'EXPOSE',ms}).catch(e=>log(e.message));};
+ $('apply').onclick=()=>{const v={open:Number($('openAngle').value),closed:Number($('closedAngle').value),relief:Number($('reliefAngle').value),travelMs:Number($('travelMs').value)};
+  if(Object.values(v).some(x=>!Number.isInteger(x))||v.open<0||v.open>180||v.closed<0||v.closed>180||v.relief<0||v.relief>180||v.travelMs<50||v.travelMs>2000){alert('Angles must be 0–180; travel allowance 50–2000 ms.');return;}send({cmd:'SET',...v}).catch(e=>log(e.message));};
+ if(navigator.serial)navigator.serial.addEventListener('disconnect',()=>{log('Device disconnected');disconnect();});
+})();
+</script></body></html>
