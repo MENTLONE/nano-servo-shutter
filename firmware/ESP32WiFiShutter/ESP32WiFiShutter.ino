@@ -6,8 +6,8 @@
 
   Exposure timer accepts microseconds. It starts when the servo-open command
   is issued, NOT when the shutter physically clears the beam.
-  An SG90 cannot provide sub-millisecond optical shuttering. The 0.5 ms and
-  1 ms presets are electronic timing tests only.
+  The 0.5-second preset is a 500 ms servo command interval, not a guaranteed
+  500 ms optical exposure. Servo travel is included in the interval.
   This is NOT a laser safety interlock.
 */
 
@@ -84,15 +84,14 @@ input{width:100%;border:1px solid #53647a;background:#101827;color:white;border-
 <section class="panel">
   <h2>Timed exposure</h2>
   <label for="duration">Custom duration (milliseconds)</label>
-  <input id="duration" type="number" min="0.5" max="210000" step="0.5" value="1000" inputmode="decimal">
+  <input id="duration" type="number" min="1" max="210000" step="1" value="1000" inputmode="decimal">
   <div class="buttons" style="margin-top:12px">
     <button class="primary" type="button" onclick="startExposure()">START CUSTOM EXPOSURE</button>
     <button type="button" onclick="setDuration(120000)">2 minutes</button>
     <button type="button" onclick="setDuration(150000)">2.5 minutes</button>
     <button type="button" onclick="setDuration(180000)">3 minutes</button>
     <button type="button" onclick="setDuration(210000)">3.5 minutes</button>
-    <button type="button" onclick="setDuration(1)">1 millisecond</button>
-    <button type="button" onclick="setDuration(0.5)">0.5 milliseconds</button>
+    <button type="button" onclick="setDuration(500)">0.5 second</button>
   </div>
   <p class="hint">Preset buttons fill the duration field. Press START CUSTOM EXPOSURE to send the command.</p>
 </section>
@@ -110,7 +109,7 @@ input{width:100%;border:1px solid #53647a;background:#101827;color:white;border-
 <div id="message" class="message" role="status" aria-live="polite"></div>
 <section class="warning">
   <strong>LASER SAFETY:</strong> The SG90 shutter is not a safety interlock. A servo can stall, lose power, or fail mechanically. Test with the laser disabled and use an independent, secure beam stop/enclosure. Never rely on this servo as the only laser barrier.
-  <br><br><strong>IMPORTANT TIMING LIMITATION:</strong> The timer begins when the ESP32 commands the servo to move, not when the shutter physically clears the beam. An SG90 cannot physically open and close in 0.5 or 1 millisecond. Those two presets are electronic timer test values only, not usable optical exposure durations. Measure actual optical exposure separately.
+  <br><br><strong>IMPORTANT TIMING LIMITATION:</strong> The timer begins when the ESP32 commands the servo to move, not when the shutter physically clears the beam. The 0.5-second preset is a 500 ms command interval. Servo movement is included in that interval, so actual optical exposure will be shorter and variable. Measure actual optical exposure separately.
 </section>
 <div class="footer">Holo Shutter · Local Wi-Fi control · No internet required</div>
 
@@ -138,12 +137,13 @@ async function sendCommand(path,pendingText) {
 }
 function setDuration(ms) {
   $("duration").value=String(ms);
-  showMessage("Preset selected: "+(ms===0.5?"0.5 milliseconds":ms===1?"1 millisecond":(ms/60000)+" minutes")+". Press START CUSTOM EXPOSURE to run it.");
+  const label = ms===500 ? "0.5 second" : (ms/60000)+" minutes";
+  showMessage("Preset selected: "+label+". Press START CUSTOM EXPOSURE to run it.");
 }
 async function startExposure() {
   const ms=Number($("duration").value);
-  if (!Number.isFinite(ms) || ms<0.5 || ms>210000) {
-    showMessage("Enter a duration from 0.5 to 210,000 milliseconds.",true); return;
+  if (!Number.isInteger(ms) || ms<1 || ms>210000) {
+    showMessage("Enter a whole duration from 1 to 210,000 milliseconds.",true); return;
   }
   const us=Math.round(ms*1000);
   await sendCommand("/api/expose?us="+us,"Sending "+ms+" ms exposure command…");
