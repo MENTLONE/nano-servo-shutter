@@ -15,7 +15,7 @@
 #include <WebServer.h>
 #include <ESP32Servo.h>
 
-static const int SERVO_PIN = 18; // Nano ESP32 D9
+static const int SERVO_PIN = D9; // Use Arduino pin label; works with either Nano ESP32 pin-numbering mode.
 static const char* AP_SSID = "HoloShutter-ESP32";
 static const char* AP_PASSWORD = "HoloShutter530";
 
