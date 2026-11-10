@@ -46,6 +46,60 @@ Then open [http://localhost:8000/web/](http://localhost:8000/web/), connect the 
 
 Close other applications that may already have the serial port open, including Arduino IDE Serial Monitor.
 
+## Arduino Nano ESP32 Wi-Fi version (iPhone control)
+
+The repository also includes a separate Wi-Fi access-point version for the **Arduino Nano ESP32**. This is independent of the classic Nano / USB Serial version described above.
+
+### Requirements
+
+- Arduino Nano ESP32
+- SG90-compatible 9 g positional servo
+- Separate regulated 5 V supply for the servo (at least 1 A recommended)
+- Arduino IDE with the **Arduino ESP32 Boards** platform installed
+- **ESP32Servo** library (install through Arduino IDE Library Manager)
+
+### Upload
+
+1. Open `firmware/ESP32WiFiShutter/ESP32WiFiShutter.ino` in Arduino IDE.
+2. Select **Arduino Nano ESP32** under Tools → Board.
+3. Select the board's USB port under Tools → Port.
+4. Install **ESP32Servo** through Library Manager if it is not already installed.
+5. Verify, then upload the sketch.
+6. Optional: open Serial Monitor at 115200 baud. The board prints its access-point name and address at startup.
+
+The servo signal is connected to **D9**. The sketch uses the Arduino `D9` pin alias so it works with either Nano ESP32 pin-numbering mode.
+
+### iPhone Wi-Fi connection
+
+The Nano ESP32 creates its own Wi-Fi network; a router or internet connection is not required.
+
+1. Power the Nano ESP32.
+2. On the iPhone, open **Settings → Wi-Fi**.
+3. Join **HoloShutter-ESP32**.
+4. The default password is **HoloShutter530**. Change `AP_PASSWORD` in the sketch before uploading if you want a different password (use at least 8 characters).
+5. Open Safari and navigate to **http://192.168.4.1**.
+6. If iOS reports “No Internet Connection,” remain connected to the shutter network; that is expected.
+
+The web interface is embedded in the firmware, so no separate HTML upload or hosting step is needed.
+
+### Wi-Fi controls and presets
+
+The page provides manual OPEN, CLOSE and CANCEL controls; timed exposure; and open/closed servo-angle calibration. Presets are 2 minutes (120,000 ms), 2.5 minutes (150,000 ms), 3 minutes (180,000 ms), 3.5 minutes (210,000 ms), and 0.5 second (500 ms). Selecting a preset fills the duration field; press **START CUSTOM EXPOSURE** to run it.
+
+The duration is a firmware command interval measured from when the servo-open command is issued. It includes servo travel time and is **not** a guaranteed optical exposure duration. A hobby servo is not a precision shutter or laser safety interlock.
+
+### Wi-Fi version wiring and safe commissioning
+
+| SG90 lead | Connection |
+|---|---|
+| Signal (usually orange/yellow) | Nano ESP32 D9 |
+| +5 V (usually red) | External regulated +5 V servo supply |
+| GND (usually brown/black) | External supply GND and Nano ESP32 GND |
+
+Power the Nano ESP32 separately through USB-C or its supported input. Do not power the servo from the board's 3.3 V pin. The Nano ESP32 does not provide a conventional 5 V output pin; use a separate regulated 5 V servo supply and connect its ground to board GND.
+
+Test all motion with the laser disabled. Verify that the mechanism does not bind or stall. Use an independent, secure beam stop / enclosure; never rely on the SG90 as the only laser barrier.
+
 ## Serial protocol
 
 The browser sends one JSON object per line and firmware replies with one JSON object per line.
